@@ -1,7 +1,8 @@
 
-R version 2.11.0 Patched (2010-04-24 r51820)
-Copyright (C) 2010 The R Foundation for Statistical Computing
+R version 2.15.0 beta (2012-03-20 r58793)
+Copyright (C) 2012 The R Foundation for Statistical Computing
 ISBN 3-900051-07-0
+Platform: x86_64-unknown-linux-gnu (64-bit)
 
 R is free software and comes with ABSOLUTELY NO WARRANTY.
 You are welcome to redistribute it under certain conditions.
@@ -17,13 +18,21 @@ Type 'q()' to quit R.
 
 > library(Bessel)
 Loading required package: Rmpfr
+Loading required package: gmp
+
+Attaching package: 'gmp'
+
+The following object(s) are masked from 'package:base':
+
+    %*%, apply, crossprod, matrix, tcrossprod
+
 Loading C code of R package 'Rmpfr': GMP using 64 bits per limb
 
 Attaching package: 'Rmpfr'
 
 The following object(s) are masked from 'package:stats':
 
-    pnorm
+    pnorm, print.integrate
 
 The following object(s) are masked from 'package:base':
 
@@ -272,3 +281,12 @@ The following object(s) are masked from 'package:base':
 > 
 > ###--------> zbesyh() in ../src/zbsubs.c  is completely unneeded (otherwise) !
 > 
+> 
+> ##  "limit  z -> 0  does not exist (there are many complex "Inf"s),
+> ##		    but for z = real, z >=0 is -Inf
+> stopifnot(BesselY(0,1) == -Inf,# == besselY(0,1),
++ 	  is.nan(BesselY(0+0i, 1)))
+> 
+> proc.time()
+   user  system elapsed 
+  2.378   0.083   2.577 
