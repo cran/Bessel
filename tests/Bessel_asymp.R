@@ -10,7 +10,8 @@ nus <- 450 + 10*(0:9)
 d.xn <- expand.grid(nu = nus, x = xs)
 
 M <- with(d.xn,
-          cbind(K = besselK(x,nu), K_exp = besselK(x,nu, expon.scaled = TRUE),
+          cbind(K      = besselK(x,nu),
+                K_exp  = besselK(x,nu, expon.scaled = TRUE),
                 K_nA.2 = besselK.nuAsym(x, nu, log = TRUE, k.max=2),
                 K_nA.3 = besselK.nuAsym(x, nu, log = TRUE, k.max=3),
                 K_nA.4 = besselK.nuAsym(x, nu, log = TRUE, k.max=4))
@@ -30,3 +31,6 @@ stopifnot(
           ,
           all.equal(M[,"K"], exp(M[,5]), tol= 1e-12)# on log.scale: 2e-16 !
           )
+
+
+cat('Time elapsed: ', proc.time(),'\n') # for ''statistical reasons''

@@ -1,21 +1,50 @@
 -*- org -*-
 
+* array under-run in .C("zbesk") ..
+ > options(CBoundsCheck=TRUE)
+ > BesselK(664.87, nu = 2, verbose=TRUE)
+ [1] 8.68047e-291
+ > BesselK(664.88, nu = 2, verbose=TRUE)
+ Error in BesselK(664.88, nu = 2) :
+   array under-run in .C("zbesk") in double argument 6
+
+* R bessel "Bugs": Wrong and correct "Lost precision" warnings in R's bessel[IJKY]()
+** besselI*asym() and others => Where are they good enough?
+** DONE `expon.scaled = TRUE` notably for *complex* args to be documented
+** DONE `besselIs(z, nu)` should work for *complex* arg
+** TODO `besselIs(z, nu, log=TRUE)` for *complex* -- fails because `log1p(<cplx>)` fails !
+** TODO `expon.scaled = TRUE` notably for *complex* args needs to be compatible for the
+   *s*eries and asymptotic functions  besselIs(), besselIasym(), besselI.nuAsym(), besselK.nuAsym()
+  ---> ../R/I-fn.R || Mostly DONE, but
+ *Why* is `I.nuAsym(*, expon.scaled=TRUE, k.max)` not particularly good ??? see "why" in ./tests/IJKY.R
+* More Tests:
+** besselI.ftrms() has *NO* code coverage
+** DONE tests/IJKY.R -- add more, notably small |x|
 * Martin Maechler's plans and wish list for the  "Bessel" R package:
-
+** TODO Implement series besselYs() for Y() as we have besselJs() .. started in ./R/Y-fn.R  <<<
 ** TODO Vignette --> ./inst/doc/other-Bessels.Rnw
-
 ** TODO More docu in ./man/Bessel.Rd
-
-** Add (most / all) of ~/R/MM/NUMERICS/bessel-fn.R
-  R/I-fn.R  -- but we need to make these work with *complex* input
-  ========   should not be hart, since the Abramowitz & Stegun formula
+** DONE More docu in ./man/Hankel.Rd and ./man/Airy.Rd
+** TODO besselKasym() - A.&S. 9.7.2 {parallel to besselIasym() which is A.&S. 9.7.1}
+** TODO *asym* formulas for J() and Y(): x → ∞ : A.&S. 9.2.{5--10}  and   ν → ∞ : A.&S. 9.3.x
+*** for now: ~/R/MM/NUMERICS/Bessel/bessel-fn.R has  besselJ.nuAsymp10.19()  from DLMF (10.19.1)
+      and also https://dlmf.nist.gov/10.17#i
+** DONE bI() - renamed to besselIs() now works with  'log = TRUE'
+** DONE Add (most / all) of ~/R/MM/NUMERICS/Bessel/bessel-fn.R
+  R/I-fn.R already added; need to make these work with *complex* input
+  ========   should not be hard, since the Abramowitz & Stegun formula
    are for complex .. though restricted, e.g. 9.7.1 (p.377) to  |Arg(z)| < pi/2
 
-** TODO David Scott: has *incomplete* BesselK  (x,y, nu,..) interfacing Fortran
+** TODO David Scott: has *incomplete* BesselK  (x,y, nu,..) interfacing Fortran and would donate it here
   code from .... (2010), in
-  ../DistributionUtils/R/incompleteBesselK.R (etc: man/*, tests/*)
+  ~/R/D/R-forge/Rmetrics/pkg/DistributionUtils/R/incompleteBesselK.R (etc: man/*, tests/*)
   and offers to let me move them into 'Bessel'
     E-mail: Sat, Sep 18, 2010 at 14:34; From: David Scott <d.scott@auckland.ac.nz>
      	    Subject "Incomplete Bessel K Function"
 
-
+* Updates and misc.
+** TODO Once we depend on R >= 3.1.0,  use sinpi() and cospi() in R/toms644.R
+* C code:
+** TODO declare all auxiliaries as 'static void'
+** TODO Consider .C() --> .Call()
+** TODO replace dgamln_() by R's Rmath lngamma() !

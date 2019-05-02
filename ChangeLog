@@ -1,3 +1,7 @@
+2017-10-27  Martin Maechler  <maechler@stat.math.ethz.ch>
+
+ ===>>>> ALL New Changes are to be documented in  inst/NEWS.Rd !!!
+
 2012-03-21  Martin Maechler  <maechler@stat.math.ethz.ch>
 
 	* DESCRIPTION (Version): 0.5-4, released to CRAN today.

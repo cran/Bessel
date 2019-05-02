@@ -12,7 +12,7 @@
 ## 1862: zbiry(zr, zi,	id, kode, bir, bii, ierr)
 
 ##  360: zbesi(zr, zi, fnu, kode, n, cyr, cyi, nz, ierr)
-BesselI <- function(z, nu, expon.scaled = FALSE, nSeq = 1)
+BesselI <- function(z, nu, expon.scaled = FALSE, nSeq = 1, verbose = 0)
 {
     nz <- length(z)
     if(nz == 0) return(z)
@@ -25,56 +25,68 @@ BesselI <- function(z, nu, expon.scaled = FALSE, nSeq = 1)
 	zi <- Im(z)
     } else stop("'z' must be complex or numeric")
     nu <- as.double(nu)
-    stopifnot(length(nu) == 1,
+    stopifnot(length(nu) == 1, length(verbose) == 1,
 	      nSeq >= 1, nSeq == as.integer(nSeq))
 
     if(nu < 0) {
 	## I(-nu,z) = I(nu,z) + (2/pi)*sin(pi*nu)*K(nu,z)  [ = A.& S. 9.6.2, p.375 ]
 	if(nu == round(nu)) ## <==> sin(pi*nu) == 0
-	    return(BesselI(z, -nu, expon.scaled, nSeq=nSeq))
+	    return(BesselI(z, -nu, expon.scaled, nSeq=nSeq, verbose=verbose))
         ## else
 	nu. <- -nu + seq_len(nSeq) - 1
-	kf <- rep(2/pi*sin(pi*nu.)* (if(expon.scaled) exp(-2*abs(z)) else 1),
-		  each=nz)
-	return(	  BesselI(z, -nu, expon.scaled, nSeq=nSeq) +
-	       kf*BesselK(z, -nu, expon.scaled, nSeq=nSeq))
+        kf <- rep(2/pi*sin(pi*nu.), each=nz)
+        if (expon.scaled) kf <- kf * rep(exp(-z-abs(zr)), nSeq)
+
+	return(	  BesselI(z, -nu, expon.scaled, nSeq=nSeq, verbose=verbose) +
+	       kf*BesselK(z, -nu, expon.scaled, nSeq=nSeq, verbose=verbose))
     }
     ## else  nu >= 0 :
 
     r <- if(isNum) numeric(nz * nSeq) else complex(nz * nSeq)
     if(nSeq > 1) r <- matrix(r, nz, nSeq)
     for(i in seq_len(nz)) {
-	ri <- .Fortran("zbesi",
-		       zr[i], zi[i],
-		       fnu = nu,
-		       kode= as.integer(1L + as.logical(expon.scaled)),
+	ri <- .C(zbesi,
+                 zr[i], zi[i],
+                 fnu = nu,
+                 kode= as.integer(1L + as.logical(expon.scaled)),
 					# 1 or 2, exactly as desired
-		       n = as.integer(nSeq),
-		       cyr = double(nSeq),
-		       cyi = double(nSeq),
-		       nz   = integer(1),
-		       ierr = integer(1), PACKAGE = "Bessel")
+                 n = as.integer(nSeq),
+                 cyr = double(nSeq),
+                 cyi = double(nSeq),
+                 nz   = integer(1),
+                 ierr = as.integer(verbose))
 	if(ri$ierr) {
 	    f.x <- sprintf("'zbesi(%g %s %gi, nu=%g)'", zr[i],
-                           c("-","+")[1+(z >= 0)], abs(zi[i]), nu)
+                           c("-","+")[1+(zi[i] >= 0)], abs(zi[i]), nu)
 	    if(ri$ierr == 3)
-		warning(sprintf("%s' large arguments -> precision loss\n (of at least half machine accuracy)", f.x))
+		warning(gettextf(
+                    "%s large arguments -> precision loss (of at least half machine accuracy)", f.x),
+                    domain = NA)
 	    else if(ri$ierr == 2) {
-		if(getOption("verbose"))
-                    message(sprintf("%s  -> overflow ; returning Inf\n", f.x))
+		if(verbose)
+                    message(gettextf("%s  -> overflow ; returning Inf\n", f.x))
                 ri$cyr <- ri$cyi <- Inf
             }
-	    else stop(sprintf("%s [Fortran] error ierr = %d", f.x, ri$ierr))
+	    else if(ri$ierr == 4) {
+		warning(gettextf("%s  -> ierr=4: |z| or nu too large\n", f.x),
+			domain = NA)
+		## FIXME: In some cases, the answer should just be 'Inf' without any warning
+		ri$cyr[] <- NaN
+		ri$cyi[] <- if(isNum) 0 else NaN
+	    }
+	    else stop(gettextf("%s unexpected error 'ierr = %d'", f.x, ri$ierr),
+		      domain = NA)
 	}
-	rz <- if(isNum) ri$cyr else complex(real = ri$cyr,
-					    imaginary = ri$cyi)
+	rz <- if(isNum && all(!is.na(ri$cyi) & ri$cyi == 0.)) ri$cyr
+	      else complex(real      = ri$cyr,
+			   imaginary = ri$cyi)
 	if(nSeq > 1) r[i,] <- rz else r[i] <- rz
     }
     r
 } ## I()
 
 ##  631: zbesj(zr, zi, fnu, kode, n, cyr, cyi, nz, ierr)
-BesselJ <- function(z, nu, expon.scaled = FALSE, nSeq = 1)
+BesselJ <- function(z, nu, expon.scaled = FALSE, nSeq = 1, verbose = 0)
 {
     nz <- length(z)
     if(nz == 0) return(z)
@@ -87,53 +99,64 @@ BesselJ <- function(z, nu, expon.scaled = FALSE, nSeq = 1)
 	zi <- Im(z)
     } else stop("'z' must be complex or numeric")
     nu <- as.double(nu)
-    stopifnot(length(nu) == 1,
+    stopifnot(length(nu) == 1, length(verbose) == 1,
 	      nSeq >= 1, nSeq == as.integer(nSeq))
     if(nu < 0) {
 	## J(-fnu,z) = J(fnu,z)*cos(pi*fnu) - Y(fnu,z)*sin(pi*fnu)
 	if(expon.scaled)
 	    stop("'expon.scaled=TRUE' not yet implemented for nu < 0")
 	pnu <- rep(pi*(-nu + seq_len(nSeq) - 1), each=nz)
-	return(BesselJ(z, -nu, nSeq=nSeq)*cos(pnu) -
+	return(BesselJ(z, -nu, nSeq=nSeq, verbose=verbose)*cos(pnu) -
 	       if(nu == round(nu)) 0 else
-	       BesselY(z, -nu, nSeq=nSeq)*sin(pnu))
+	       BesselY(z, -nu, nSeq=nSeq, verbose=verbose)*sin(pnu))
     }
     ## else  nu >= 0 :
 
     r <- if(isNum) numeric(nz * nSeq) else complex(nz * nSeq)
     if(nSeq > 1) r <- matrix(r, nz, nSeq)
     for(i in seq_len(nz)) {
-	ri <- .Fortran("zbesj",
-		       zr[i], zi[i],
-		       fnu = nu,
-		       kode= as.integer(1L + as.logical(expon.scaled)),
+	ri <- .C(zbesj,
+                 zr[i], zi[i],
+                 fnu = nu,
+                 kode= as.integer(1L + as.logical(expon.scaled)),
 					# 1 or 2, exactly as desired
-		       n = as.integer(nSeq),
-		       cyr = double(nSeq),
-		       cyi = double(nSeq),
-		       nz   = integer(1),
-		       ierr = integer(1), PACKAGE = "Bessel")
+                 n = as.integer(nSeq),
+                 cyr = double(nSeq),
+                 cyi = double(nSeq),
+                 nz   = integer(1),
+                 ierr = as.integer(verbose))
 	if(ri$ierr) {
 	    f.x <- sprintf("'zbesj(%g %s %gi, nu=%g)'", zr[i],
-                           c("-","+")[1+(z >= 0)], abs(zi[i]), nu)
+                           c("-","+")[1+(zi[i] >= 0)], abs(zi[i]), nu)
 	    if(ri$ierr == 3)
-		warning(sprintf("%s large arguments -> precision loss\n	 (of at least half machine accuracy)", f.x))
+		warning(sprintf(
+		"%s large arguments -> precision loss (of at least half machine accuracy)",
+				f.x))
 	    else if(ri$ierr == 2) {
-		if(getOption("verbose"))
+		if(verbose)
                     message(sprintf("%s  -> overflow ; returning Inf\n", f.x))
                 ri$cyr <- ri$cyi <- Inf
             }
-	    else stop(sprintf("%s [Fortran] error ierr = %d", f.x, ri$ierr))
+	    else if(ri$ierr == 4) {
+		warning(gettextf("%s  -> ierr=4: |z| or nu too large\n", f.x),
+			domain = NA)
+		## FIXME: In some cases, the answer should just be Inf or 0  (w/o warning!)
+		ri$cyr[] <- NaN
+		ri$cyi[] <- if(isNum) 0 else NaN
+	    }
+	    else stop(gettextf("%s unexpected error 'ierr = %d'", f.x, ri$ierr),
+		      domain = NA)
 	}
-	rz <- if(isNum) ri$cyr else complex(real = ri$cyr,
-					    imaginary = ri$cyi)
+	rz <- if(isNum) ri$cyr
+              else complex(real      = ri$cyr,
+                           imaginary = ri$cyi)
 	if(nSeq > 1) r[i,] <- rz else r[i] <- rz
     }
     r
 } ## J()
 
 ##  899: zbesk(zr, zi, fnu, kode, n, cyr, cyi, nz, ierr)
-BesselK <- function(z, nu, expon.scaled = FALSE, nSeq = 1)
+BesselK <- function(z, nu, expon.scaled = FALSE, nSeq = 1, verbose = 0)
 {
     nz <- length(z)
     if(nz == 0) return(z)
@@ -146,42 +169,53 @@ BesselK <- function(z, nu, expon.scaled = FALSE, nSeq = 1)
 	zi <- Im(z)
     } else stop("'z' must be complex or numeric")
     nu <- as.double(nu)
-    stopifnot(length(nu) == 1,
+    stopifnot(length(nu) == 1, length(verbose) == 1,
 	      nSeq >= 1, nSeq == as.integer(nSeq))
 
     if(nu < 0) {
 	## K(-nu,z) = K(nu,z)
-	return(BesselK(z, -nu, expon.scaled, nSeq=nSeq))
+	return(BesselK(z, -nu, expon.scaled, nSeq=nSeq, verbose=verbose))
     }
     ## else  nu >= 0 :
 
     r <- if(isNum) numeric(nz * nSeq) else complex(nz * nSeq)
     if(nSeq > 1) r <- matrix(r, nz, nSeq)
     for(i in seq_len(nz)) {
-	ri <- .Fortran("zbesk",
-		       zr[i], zi[i],
-		       fnu = nu,
-		       kode= as.integer(1L + as.logical(expon.scaled)),
+	ri <- .C(zbesk,
+                 zr[i], zi[i],
+                 fnu = nu,
+                 kode= as.integer(1L + as.logical(expon.scaled)),
 					# 1 or 2, exactly as desired
-		       n = as.integer(nSeq),
-		       cyr = double(nSeq),
-		       cyi = double(nSeq),
-		       nz   = integer(1),
-		       ierr = integer(1), PACKAGE = "Bessel")
+                 n = as.integer(nSeq),
+                 cyr = double(nSeq),
+                 cyi = double(nSeq),
+                 nz   = integer(1),
+                 ierr = as.integer(verbose))
 	if(ri$ierr) {
 	    f.x <- sprintf("'zbesk(%g %s %gi, nu=%g)'", zr[i],
-                           c("-","+")[1+(z >= 0)], abs(zi[i]), nu)
+                           c("-","+")[1+(zi[i] >= 0)], abs(zi[i]), nu)
 	    if(ri$ierr == 3)
-		warning(sprintf("%s large arguments -> precision loss\n	 (of at least half machine accuracy)", f.x))
+		warning(sprintf(
+		"%s large arguments -> precision loss (of at least half machine accuracy)",
+				f.x))
 	    else if(ri$ierr == 2) {
-		if(getOption("verbose"))
+		if(verbose)
                     message(sprintf("%s  -> overflow ; returning Inf\n", f.x))
                 ri$cyr <- ri$cyi <- Inf
             }
-	    else stop(sprintf("%s [Fortran] error ierr = %d", f.x, ri$ierr))
+	    else if(ri$ierr == 4) {
+		warning(gettextf("%s  -> ierr=4: |z| or nu too large\n", f.x),
+			domain = NA)
+		## FIXME: In some cases, the answer should just be Inf or 0  (w/o warning!)
+		ri$cyr[] <- NaN
+		ri$cyi[] <- if(isNum) 0 else NaN
+	    }
+	    else stop(gettextf("%s unexpected error 'ierr = %d'", f.x, ri$ierr),
+		      domain = NA)
 	}
-	rz <- if(isNum) ri$cyr else complex(real = ri$cyr,
-					    imaginary = ri$cyi)
+	rz <- if(isNum && all(!is.na(ri$cyi) & ri$cyi == 0.)) ri$cyr
+	      else complex(real      = ri$cyr,
+			   imaginary = ri$cyi)
 	if(nSeq > 1) r[i,] <- rz else r[i] <- rz
     }
     r
@@ -189,7 +223,7 @@ BesselK <- function(z, nu, expon.scaled = FALSE, nSeq = 1)
 
 
 ## 1182: zbesy(zr, zi, fnu, kode, n, cyr, cyi, nz, cwrkr, cwrki, ierr)
-BesselY <- function(z, nu, expon.scaled = FALSE, nSeq = 1)
+BesselY <- function(z, nu, expon.scaled = FALSE, nSeq = 1, verbose = 0)
 {
     nz <- length(z)
     if(nz == 0) return(z)
@@ -202,7 +236,7 @@ BesselY <- function(z, nu, expon.scaled = FALSE, nSeq = 1)
 	zi <- Im(z)
     } else stop("'z' must be complex or numeric")
     nu <- as.double(nu)
-    stopifnot(length(nu) == 1,
+    stopifnot(length(nu) == 1, length(verbose) == 1,
 	      nSeq >= 1, nSeq == as.integer(nSeq))
 
     if(nu < 0) {
@@ -210,12 +244,13 @@ BesselY <- function(z, nu, expon.scaled = FALSE, nSeq = 1)
 	if(expon.scaled)
 	    stop("'expon.scaled=TRUE' not yet implemented for nu < 0")
 	pnu <- rep(pi*(-nu + seq_len(nSeq) - 1), each=nz)
-	return(BesselY(z, -nu, nSeq=nSeq)*cos(pnu) +
+	return(BesselY(z, -nu, nSeq=nSeq, verbose=verbose)*cos(pnu) +
 	       if(nu == round(nu)) 0 else
-	       BesselJ(z, -nu, nSeq=nSeq)*sin(pnu))
+	       BesselJ(z, -nu, nSeq=nSeq, verbose=verbose)*sin(pnu))
     }
     ## else  nu >= 0 :
 
+    isNum <- isNum && all(zr >= 0)
     r <- if(isNum) numeric(nz * nSeq) else complex(nz * nSeq)
     if(nSeq > 1) r <- matrix(r, nz, nSeq)
     for(i in seq_len(nz)) {
@@ -227,32 +262,43 @@ BesselY <- function(z, nu, expon.scaled = FALSE, nSeq = 1)
             1/(0+0i)
         } else {
 ## 1182: zbesy(zr, zi, fnu, kode, n, cyr, cyi, nz, cwrkr, cwrki, ierr)
-            ri <- .Fortran("zbesy",
-                           zr[i], zi[i],
-                           fnu = nu,
-                           kode= as.integer(1L + as.logical(expon.scaled)),
+            ri <- .C(zbesy,
+                     zr[i], zi[i],
+                     fnu = nu,
+                     kode= as.integer(1L + as.logical(expon.scaled)),
 					# 1 or 2, exactly as desired
-                           n = as.integer(nSeq),
-                           cyr = double(nSeq),
-                           cyi = double(nSeq),
-                           nz   = integer(1),
-                           cwrkr= double(nSeq),
-                           cwrki= double(nSeq),
-                           ierr = integer(1), PACKAGE = "Bessel")
+                     n = as.integer(nSeq),
+                     cyr = double(nSeq),
+                     cyi = double(nSeq),
+                     nz   = integer(1),
+                     cwrkr= double(nSeq),
+                     cwrki= double(nSeq),
+                     ierr = as.integer(verbose))
             if(ri$ierr) {
                 f.x <- sprintf("'zbesy(%g %s %gi, nu=%g)'", zr[i],
-                               c("-","+")[1+(z >= 0)], abs(zi[i]), nu)
+                               c("-","+")[1+(zi[i] >= 0)], abs(zi[i]), nu)
                 if(ri$ierr == 3)
-                    warning(sprintf("%s large arguments -> precision loss\n	 (of at least half machine accuracy)", f.x))
+                    warning(sprintf(
+			"%s large arguments -> precision loss (of at least half machine accuracy)",
+			f.x))
                 else if(ri$ierr == 2) {
-                    if(getOption("verbose"))
+                    if(verbose)
                         message(sprintf("%s  -> overflow ; returning Inf\n", f.x))
                     ri$cyr <- ri$cyi <- Inf
                 }
-                else stop(sprintf("%s [Fortran] error ierr = %d", f.x, ri$ierr))
-            }
-            rz <- if(isNum) ri$cyr else complex(real = ri$cyr,
-                                                imaginary = ri$cyi)
+		else if(ri$ierr == 4) {
+		    warning(gettextf("%s  -> ierr=4: |z| or nu too large\n", f.x),
+			    domain = NA)
+		    ## FIXME: In some cases, the answer should just be Inf or 0  (w/o warning!)
+		    ri$cyr[] <- NaN
+		    ri$cyi[] <- if(isNum) 0 else NaN
+		}
+		else stop(gettextf("%s unexpected error 'ierr = %d'", f.x, ri$ierr),
+			  domain = NA)
+	    }
+            rz <- if(isNum) ri$cyr
+		  else complex(real      = ri$cyr,
+			       imaginary = ri$cyi)
         }
         if(nSeq > 1) r[i,] <- rz else r[i] <- rz
     }
@@ -262,7 +308,7 @@ BesselY <- function(z, nu, expon.scaled = FALSE, nSeq = 1)
 ##---------------- Hankel function H() ------------------
 
 ##   10: zbesh(zr, zi, fnu, kode, m, n, cyr, cyi, nz, ierr)
-BesselH <- function(m, z, nu, expon.scaled = FALSE, nSeq = 1)
+BesselH <- function(m, z, nu, expon.scaled = FALSE, nSeq = 1, verbose = 0)
 {
 ## c***keywords	 H-bessel functions,bessel functions of complex argument,
 ## c		 bessel functions of third kind,hankel functions
@@ -296,7 +342,7 @@ BesselH <- function(m, z, nu, expon.scaled = FALSE, nSeq = 1)
 	zi <- Im(z)
     } else stop("'z' must be complex or numeric")
     nu <- as.double(nu)
-    stopifnot(length(nu) == 1,
+    stopifnot(length(nu) == 1, length(verbose) == 1,
 	      nSeq >= 1, nSeq == as.integer(nSeq))
 
     if(nu < 0) {
@@ -305,7 +351,7 @@ BesselH <- function(m, z, nu, expon.scaled = FALSE, nSeq = 1)
 	if(expon.scaled)
 	    stop("'expon.scaled=TRUE' not yet implemented for nu < 0")
 	pnu <- rep(c(1i,-1i)[m] * pi*(-nu + seq_len(nSeq) - 1), each=nz)
-	return(BesselH(m, z, -nu, nSeq=nSeq)* exp(pnu))
+	return(BesselH(m, z, -nu, nSeq=nSeq, verbose=verbose)* exp(pnu))
     }
     ## else  nu >= 0 :
 
@@ -313,31 +359,42 @@ BesselH <- function(m, z, nu, expon.scaled = FALSE, nSeq = 1)
     if(nSeq > 1) r <- matrix(r, nz, nSeq)
     for(i in seq_len(nz)) {
 	## zbesh(zr, zi, fnu, kode, m, n, cyr, cyi, nz, ierr)
-	ri <- .Fortran("zbesh",
-		       zr[i], zi[i],
-		       fnu = nu,
-		       kode= as.integer(1L + as.logical(expon.scaled)),
+	ri <- .C(zbesh,
+                 zr[i], zi[i],
+                 fnu = nu,
+                 kode= as.integer(1L + as.logical(expon.scaled)),
 					# 1 or 2, exactly as desired
-		       m = m,
-		       n = as.integer(nSeq),
-		       cyr = double(nSeq),
-		       cyi = double(nSeq),
-		       nz   = integer(1),
-		       ierr = integer(1), PACKAGE = "Bessel")
+                 m = m,
+                 n = as.integer(nSeq),
+                 cyr = double(nSeq),
+                 cyi = double(nSeq),
+                 nz   = integer(1),
+                 ierr = as.integer(verbose))
 	if(ri$ierr) {
 	    f.x <- sprintf("'zbesh(%g %s %gi, nu=%g)'", zr[i],
-                           c("-","+")[1+(z >= 0)], abs(zi[i]), nu)
+                           c("-","+")[1+(zi[i] >= 0)], abs(zi[i]), nu)
 	    if(ri$ierr == 3)
-		warning(sprintf("%s large arguments -> precision loss\n	 (of at least half machine accuracy)", f.x))
+		warning(sprintf(
+		"%s large arguments -> precision loss (of at least half machine accuracy)",
+				f.x))
 	    else if(ri$ierr == 2) {
-		if(getOption("verbose"))
+		if(verbose)
                     message(sprintf("%s  -> overflow ; returning Inf\n", f.x))
                 ri$cyr <- ri$cyi <- Inf
             }
-	    else stop(sprintf("%s [Fortran] error ierr = %d", f.x, ri$ierr))
+	    else if(ri$ierr == 4) {
+		warning(gettextf("%s  -> ierr=4: |z| or nu too large\n", f.x),
+			domain = NA)
+		## FIXME: In some cases, the answer should just be Inf or 0  (w/o warning!)
+		ri$cyr[] <- NaN
+		ri$cyi[] <- if(isNum) 0 else NaN
+	    }
+	    else stop(gettextf("%s unexpected error 'ierr = %d'", f.x, ri$ierr),
+		      domain = NA)
 	}
-	rz <- if(isNum) ri$cyr else complex(real = ri$cyr,
-					    imaginary = ri$cyi)
+	rz <- if(isNum && all(!is.na(ri$cyi) & ri$cyi == 0.)) ri$cyr
+	      else complex(real      = ri$cyr,
+			   imaginary = ri$cyi)
 	if(nSeq > 1) r[i,] <- rz else r[i] <- rz
     }
     r
@@ -348,12 +405,12 @@ BesselH <- function(m, z, nu, expon.scaled = FALSE, nSeq = 1)
 ## 1471:  zairy(zr, zi, id, kode, air, aii, nz, ierr)
 ## 1867:  zbiry(zr, zi, id, kode, bir, bii, ierr)
 
-AiryA <- function(z, deriv = 0, expon.scaled = FALSE)
+AiryA <- function(z, deriv = 0, expon.scaled = FALSE, verbose = 0)
 {
 ## Purpose:  to compute airy functions ai(z) and dai(z) for complex z
 ##	     airy function : "Bessel functions of order one third"
     deriv <- as.integer(deriv)
-    stopifnot(length(deriv) == 1, deriv == 0 || deriv == 1)
+    stopifnot(length(deriv) == 1, deriv == 0 || deriv == 1, length(verbose) == 1)
     nz <- length(z)
     if(nz == 0) return(z)
     isNum <- is.numeric(z)
@@ -367,38 +424,47 @@ AiryA <- function(z, deriv = 0, expon.scaled = FALSE)
     r <- if(isNum) numeric(nz) else complex(nz)
     for(i in seq_len(nz)) {
 	## zairy(zr, zi, id, kode, air, aii, nz, ierr)
-	ri <- .Fortran("zairy",
-		       zr[i], zi[i],
-		       id = deriv,
-		       kode= as.integer(1L + as.logical(expon.scaled)),
+	ri <- .C(zairy,
+                 zr[i], zi[i],
+                 id = deriv,
+                 kode= as.integer(1L + as.logical(expon.scaled)),
 					# 1 or 2, exactly as desired
-		       air = double(1),
-		       aii = double(1),
-		       nz   = integer(1),
-		       ierr = integer(1), PACKAGE = "Bessel")
+                 air = double(1),
+                 aii = double(1),
+                 nz   = integer(1),
+                 ierr = as.integer(verbose))
 	if(ri$ierr) {
 	    f.x <- sprintf("'zairy(%g %s %gi, deriv=%d)'", zr[i],
-                           c("-","+")[1+(z >= 0)], abs(zi[i]), deriv)
+                           c("-","+")[1+(zi[i] >= 0)], abs(zi[i]), deriv)
 	    if(ri$ierr == 3)
-		warning(sprintf("%s large arguments -> precision loss\n	 (of at least half machine accuracy)", f.x))
+		warning(sprintf(
+		"%s large arguments -> precision loss (of at least half machine accuracy)",
+				f.x))
 	    else if(ri$ierr == 2) {
-		if(getOption("verbose"))
+		if(verbose)
                     message(sprintf("%s  -> overflow ; returning Inf\n", f.x))
                 ri$air <- ri$aii <- Inf
             }
-	    else stop(sprintf("%s [Fortran] error ierr = %d", f.x, ri$ierr))
+	    else if(ri$ierr == 4) {
+		warning(gettextf("%s  -> ierr=4: |z| too large\n", f.x), domain = NA)
+		## FIXME: In some cases, the answer should just be Inf or 0 or .... (w/o warning!)
+		ri$air <- NaN
+		ri$aii <- if(isNum) 0 else NaN
+	    }
+	    else stop(gettextf("%s unexpected error 'ierr = %d'", f.x, ri$ierr),
+		      domain = NA)
 	}
 	r[i] <- if(isNum) ri$air else complex(real = ri$air, imaginary = ri$aii)
     }
     r
 } ## AiryA()
 
-AiryB <- function(z, deriv = 0, expon.scaled = FALSE)
+AiryB <- function(z, deriv = 0, expon.scaled = FALSE, verbose = 0)
 {
 ## Purpose:  to compute airy functions bi(z) and dbi(z) for complex z
 ##	     airy function : "Bessel functions of order one third"
     deriv <- as.integer(deriv)
-    stopifnot(length(deriv) == 1, deriv == 0 || deriv == 1)
+    stopifnot(length(deriv) == 1, deriv == 0 || deriv == 1, length(verbose) == 1)
     nz <- length(z)
     if(nz == 0) return(z)
     isNum <- is.numeric(z)
@@ -412,26 +478,35 @@ AiryB <- function(z, deriv = 0, expon.scaled = FALSE)
     r <- if(isNum) numeric(nz) else complex(nz)
     for(i in seq_len(nz)) {
 	## zairy(zr, zi, id, kode, air, aii, nz, ierr)
-	ri <- .Fortran("zbiry",
-		       zr[i], zi[i],
-		       id = deriv,
-		       kode= as.integer(1L + as.logical(expon.scaled)),
+	ri <- .C(zbiry,
+                 zr[i], zi[i],
+                 id = deriv,
+                 kode= as.integer(1L + as.logical(expon.scaled)),
 					# 1 or 2, exactly as desired
-		       bir = double(1),
-		       bii = double(1),
-		       nz   = integer(1),
-		       ierr = integer(1), PACKAGE = "Bessel")
+                 bir = double(1),
+                 bii = double(1),
+                 nz   = integer(1),
+                 ierr = as.integer(verbose))
 	if(ri$ierr) {
 	    f.x <- sprintf("'zairy(%g %s %gi, deriv=%d)'", zr[i],
-                           c("-","+")[1+(z >= 0)], abs(zi[i]), deriv)
+                           c("-","+")[1+(zi[i] >= 0)], abs(zi[i]), deriv)
 	    if(ri$ierr == 3)
-		warning(sprintf("%s large arguments -> precision loss\n	 (of at least half machine accuracy)", f.x))
+		warning(sprintf(
+		"%s large arguments -> precision loss (of at least half machine accuracy)",
+				f.x))
 	    else if(ri$ierr == 2) {
-		if(getOption("verbose"))
+		if(verbose)
                     message(sprintf("%s  -> overflow ; returning Inf\n", f.x))
                 ri$bir <- ri$bii <- Inf
             }
-	    else stop(sprintf("%s [Fortran] error ierr = %d", f.x, ri$ierr))
+	    else if(ri$ierr == 4) {
+		warning(gettextf("%s  -> ierr=4: |z| too large\n", f.x), domain = NA)
+		## FIXME: In some cases, the answer should just be Inf or 0 or .... (w/o warning!)
+		ri$bir <- NaN
+		ri$bii <- if(isNum) 0 else NaN
+	    }
+	    else stop(gettextf("%s unexpected error 'ierr = %d'", f.x, ri$ierr),
+		      domain = NA)
 	}
 	r[i] <- if(isNum) ri$bir else complex(real = ri$bir, imaginary = ri$bii)
     }
