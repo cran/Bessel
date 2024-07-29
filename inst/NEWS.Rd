@@ -4,6 +4,22 @@
 \title{News for \R Package \pkg{Bessel}}
 \encoding{UTF-8}
 
+\section{Changes in version 0.6-1 (2024-07-29, svn r323)}{
+  \subsection{New Features}{
+    \itemize{
+      \item Using \code{cospi(nu)} instead of \code{cos(pi*nu)}, for
+      negative \code{nu}, both in \code{BesselJ()} and \code{BesselY()} may
+      increase accuracy.
+    }
+  }
+  \subsection{Bug Fixes}{
+    \itemize{
+      \item Rd-crossrefs: replace \code{\\linkS4class\{mpfr\}} by
+      \code{\\link[Rmpfr:mpfr-class]\{mpfr\}}.
+    }
+  }
+}
+
 \section{Changes in version 0.6-0 (2019-04-24, svn r67)}{
   \subsection{SIGNIFICANT USER-VISIBLE CHANGES}{
     \itemize{

@@ -16,7 +16,7 @@ besselIs(x, nu, nterm = 800, expon.scaled = FALSE, log = FALSE,
 \arguments{
   \item{x}{numeric or complex vector, or of another \code{\link{class}}
     for which arithmetic methods are defined, notably
-    objects of class \code{\linkS4class{mpfr}} (package \CRANpkg{Rmpfr}).}
+    objects of class \code{\link[Rmpfr:mpfr-class]{mpfr}} (package \CRANpkg{Rmpfr}).}
   \item{nu}{non-negative numeric (scalar).}
   \item{nterm}{integer indicating the number of terms to be used.
     Should be in the order of \code{abs(x)}, but can be smaller for
@@ -39,7 +39,7 @@ besselIs(x, nu, nterm = 800, expon.scaled = FALSE, log = FALSE,
   vector of the same class and length as \code{x}.
 }
 \references{
-  Abramowitz, M., and Stegun, I. A. (1955, etc).
+  Abramowitz, M., and Stegun, I. A. (1964,.., 1972).
   \emph{Handbook of mathematical functions}
   (NBS AMS series 55, U.S. Dept. of Commerce).
 }
